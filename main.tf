@@ -69,27 +69,46 @@ resource "aws_iam_instance_profile" "ec2_profile" {
 
 # -----------------------------
 # EC2 INSTANCE
+# Static AMI (no data.aws_ami lookup) so plan-only runs need no AWS
+# credentials and reliably reach policy evaluation. Plan does not validate
+# that the AMI id exists.
 # -----------------------------
-data "aws_ami" "amazon_linux" {
-  most_recent = true
-  owners      = ["amazon"]
-
-  filter {
-    name   = "name"
-    values = ["al2023-ami-*-x86_64"]
-  }
-}
-
 resource "aws_instance" "ec2" {
-  ami                    = data.aws_ami.amazon_linux.id
-  instance_type          = var.instance_type
-  key_name               = var.key_name
-  subnet_id              = aws_subnet.public.id
-  vpc_security_group_ids = [aws_security_group.ec2_sg.id]
-  iam_instance_profile   = aws_iam_instance_profile.ec2_profile.name
+  ami                         = var.ami_id
+  instance_type               = var.instance_type
+  key_name                    = var.key_name
+  subnet_id                   = aws_subnet.public.id
+  vpc_security_group_ids      = [aws_security_group.ec2_sg.id]
+  iam_instance_profile        = aws_iam_instance_profile.ec2_profile.name
+  associate_public_ip_address = true # deterministic FAIL: ec2-instance-no-public-ip (EC2.9)
 
   tags = {
     Name = "terraform-ec2"
+  }
+}
+
+# -----------------------------
+# EBS VOLUMES — deterministic pass/fail pair for the OOTB
+# `encrypted-volumes` (EC2.3) tfpolicy: one encrypted (PASS), one not (FAIL).
+# A single policy therefore reports passed >= 1 AND advisory-failed >= 1.
+# -----------------------------
+resource "aws_ebs_volume" "compliant" {
+  availability_zone = "${var.aws_region}a"
+  size              = 8
+  encrypted         = true # PASS
+
+  tags = {
+    Name = "t32-ebs-compliant"
+  }
+}
+
+resource "aws_ebs_volume" "noncompliant" {
+  availability_zone = "${var.aws_region}a"
+  size              = 8
+  encrypted         = false # FAIL
+
+  tags = {
+    Name = "t32-ebs-noncompliant"
   }
 }
 

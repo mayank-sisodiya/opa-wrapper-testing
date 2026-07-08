@@ -14,6 +14,11 @@ variable "instance_type" {
   default = "t2.micro"
 }
 
+variable "ami_id" {
+  description = "Static AMI id (avoids a live data.aws_ami lookup at plan time)"
+  default     = "ami-0c55b159cbfafe1f0"
+}
+
 variable "key_name" {
   description = "EC2 key pair name"
 }
